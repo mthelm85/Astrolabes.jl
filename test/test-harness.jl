@@ -47,5 +47,9 @@ end
     # but the backward check fails
     @test !Astrolabes.check_definition([hor], resid; tol = 1e-9).passed
     # and a wrong curve fails the backward check too
-    @test !Astrolabes.check_definition([Circle(hor.c, hor.r * 1.001)], resid; tol = 1e-9).passed
+    @test !Astrolabes.check_definition(
+        [Circle(hor.c, hor.r * 1.001)],
+        resid;
+        tol = 1e-9,
+    ).passed
 end

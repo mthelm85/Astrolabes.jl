@@ -4,43 +4,56 @@ CurrentModule = Astrolabes
 
 # Astrolabes.jl
 
-Geometrically exact, fabrication-ready astrolabes for any latitude and epoch — with
-built-in verification: every drawn line is checked against spherical astronomy.
+Geometrically exact, fabrication-ready planispheric astrolabes for any latitude and
+epoch. Every drawn line is checked against spherical astronomy, the finished instrument is
+operated in simulation and compared with closed-form answers, and the parts are checked
+against the rules of the shop that will make them.
 
-!!! note "Work in progress"
-    Implemented so far: the astronomy layer (epochs, long-term precession and obliquity via
-    SOFA.jl, a Meeus solar model and equation of time), the 2-D primitives, the
-    stereographic projection, the sample-and-project verification harness, and plates with
-    the equator, tropics, limb, horizon and almucantars.
+![An astrolabe for Zürich](assets/gallery/zurich.svg)
 
 ## Quick start
 
 ```julia
 using Astrolabes
 
-plate = Plate(47.3)          # or Plate("47°18′N")
-verify(plate)                # forward + backward sampling checks on every line
-render_svg(plate, "plate.svg"; diameter_mm = 150)
+a = astrolabe(47.3; longitude = 8.54, timezone = 1.0)   # Zürich, 150 mm, laser cut
+verify(a)                     # ≈ 200 checks: geometry, use, fabrication
+render(a, "zurich")           # SVG + DXF for every part, and parts.txt
 ```
 
-## How verification works
+`render` writes one file set per part: the mater (with the back engraved), the limb ring,
+the plate(s), the rete, the rule, the alidade and its two sight vanes. Upload them to a
+laser-cutting, metal-cutting or PCB service; `parts.txt` lists quantities, sizes and the
+assembly order.
 
-Plate lines are drawn from closed-form formulas. Each line is then checked two ways
-with independent machinery:
+## What you get
 
-- **sphere → plate:** sample the defining set on the celestial sphere (for an almucantar,
-  every azimuth at that altitude, converted with SOFA's `ae2hd`), project each point, and
-  measure its distance to the drawn primitive;
-- **plate → sphere:** sample the drawn primitive, un-project each point and evaluate the
-  defining equation (e.g. its altitude, via SOFA's `hd2ae`).
+- **Plates** for any latitude from the equator to the pole, either hemisphere: equator,
+  tropics, horizon, almucantars, twilight lines, azimuths and exact unequal hours.
+- **Rete** with the ecliptic graduated to the degree and up to ~35 bright stars from the
+  Hipparcos new reduction, precessed to your epoch, with IAU or traditional names.
+- **Mater** with 24- or 12-hour and degree scales, optionally set for your longitude and
+  time zone; on the **back** the altitude scale, zodiac and calendar (concentric or the
+  medieval eccentric form), equation of time, shadow square, unequal hours and an
+  optional sine quadrant.
+- **Profiles** for laser-cut sheet ([`LaserCut`](@ref)), metal ([`Metal`](@ref)),
+  printed-circuit boards ([`PCB`](@ref)) and a 1:1 paper proof ([`Paper`](@ref)).
 
-The first catches wrong curves; the second also catches extra geometry such as a line that
-was not clipped to the limb.
+## Pages
+
+- [How it works](@ref how) — the projection and what each line means.
+- [Using the library](@ref using) — options, multiple plates, historical epochs.
+- [Fabrication](@ref fabrication) — profiles, file formats, ordering and assembly.
+- [Verification](@ref verification) — what is checked and how.
+- [Gallery](@ref gallery).
 
 ## Conventions
 
 - Degrees at the public API; radians internally.
-- Plate geometry uses equator radius `R = 1`; millimetres only when rendering.
-- Northern plates project from the south celestial pole: east on the left, the rete turns
-  clockwise. Southern plates project from the north celestial pole and are mirrored, so the
-  plate for −φ is the mirror image of the plate for +φ.
+- Geometry uses equator radius `R = 1`; millimetres only in `render`. `a.scale` is
+  millimetres per unit.
+- Northern instruments project from the south celestial pole: east is on the left and the
+  rete turns clockwise. Southern instruments project from the north pole and are drawn as
+  the mirror image, as the southern sky looks to an observer facing the pole: east is on
+  the right and the rete turns anticlockwise. The instrument for −φ is the mirror image of
+  the one for +φ.

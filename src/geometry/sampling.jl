@@ -22,7 +22,8 @@ struct CurveCheck
 end
 
 function CurveCheck(label::AbstractString, errs::AbstractVector{<:Real}, tol::Real)
-    isempty(errs) && return CurveCheck(String(label), 0, NaN, tol, false)
+    # an empty sample fails a real check (nothing was verified); info checks pass
+    isempty(errs) && return CurveCheck(String(label), 0, NaN, tol, isinf(tol))
     m = maximum(errs)
     return CurveCheck(String(label), length(errs), m, tol, m <= tol)
 end

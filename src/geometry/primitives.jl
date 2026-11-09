@@ -183,7 +183,7 @@ function intersect_prims(a::Primitive, b::Primitive; tol::Real = 1e-12)
     pts = _intersect(carrier(a), carrier(b))
     return [
         p for p in pts if distance_to(a, p) <= tol * (1 + norm2(p)) &&
-            distance_to(b, p) <= tol * (1 + norm2(p))
+        distance_to(b, p) <= tol * (1 + norm2(p))
     ]
 end
 
@@ -191,87 +191,3 @@ _intersect(a::Circle, b::Circle) = circle_circle(a.c, a.r, b.c, b.r)
 _intersect(a::Circle, b::Line) = circle_line(a.c, a.r, b.p, b.d)
 _intersect(a::Line, b::Circle) = circle_line(b.c, b.r, a.p, a.d)
 _intersect(a::Line, b::Line) = line_line(a.p, a.d, b.p, b.d)
-
-# ---------------------------------------------------------------- clipping
-
-inside(D::Circle, p::Pt) = norm2(p - D.c) <= D.r
-
-"""
-    clip_to_disk(prim, D::Circle) -> Vector{Primitive}
-
-The parts of `prim` that lie inside the closed disk `D`.
-"""
-function clip_to_disk(c::Circle, D::Circle)
-    d = norm2(c.c - D.c)
-    d + c.r <= D.r && return Primitive[c]              # entirely inside
-    (d >= c.r + D.r || d + D.r <= c.r) && return Primitive[]   # outside, or encloses D
-    return clip_to_disk(Arc(c.c, c.r, 0.0, 2π), D)
-end
-
-function clip_to_disk(a::Arc, D::Circle)
-    pts = circle_circle(a.c, a.r, D.c, D.r)
-    cuts = sort!([wrap_from(angle_of(p - a.c), a.θ1) for p in pts])
-    bounds = [a.θ1; filter(t -> a.θ1 < t < a.θ2, cuts); a.θ2]
-    out = Primitive[]
-    for i = 1:(length(bounds)-1)
-        t1, t2 = bounds[i], bounds[i+1]
-        t2 - t1 < 1e-14 && continue
-        inside(D, arc_point(a, (t1 + t2) / 2)) && push!(out, Arc(a.c, a.r, t1, t2))
-    end
-    return merge_arcs(out)
-end
-
-# join consecutive arcs that touch (e.g. across the θ1/θ2 seam of a full circle)
-function merge_arcs(arcs::Vector{Primitive})
-    length(arcs) == 2 || return arcs
-    a, b = arcs[1]::Arc, arcs[2]::Arc
-    if isapprox(b.θ2, a.θ1 + 2π; atol = 1e-13)
-        return Primitive[Arc(b.c, b.r, b.θ1, a.θ2 + 2π)]
-    end
-    return arcs
-end
-
-function clip_to_disk(l::Line, D::Circle)
-    pts = circle_line(D.c, D.r, l.p, l.d)
-    length(pts) == 2 || return Primitive[]
-    return Primitive[Segment(pts[1], pts[2])]
-end
-
-function clip_to_disk(s::Segment, D::Circle)
-    ia, ib = inside(D, s.a), inside(D, s.b)
-    ia && ib && return Primitive[s]
-    l = Line(s.a, s.b - s.a)
-    pts = circle_line(D.c, D.r, l.p, l.d)
-    length(pts) == 2 || return Primitive[]
-    L = norm2(s.b - s.a)
-    t(p) = dot2(p - s.a, l.d)
-    t1 = clamp(t(pts[1]), 0.0, L)
-    t2 = clamp(t(pts[2]), 0.0, L)
-    t2 - t1 <= 1e-14 && return Primitive[]
-    return Primitive[Segment(s.a + t1 * l.d, s.a + t2 * l.d)]
-end
-
-function clip_to_disk(pl::Polyline, D::Circle)
-    out = Primitive[]
-    run = Pt[]
-    for i = 1:(length(pl.pts)-1)
-        pieces = clip_to_disk(Segment(pl.pts[i], pl.pts[i+1]), D)
-        if isempty(pieces)
-            length(run) >= 2 && push!(out, Polyline(run))
-            run = Pt[]
-            continue
-        end
-        seg = only(pieces)::Segment
-        if !isempty(run) && isapprox(run[end], seg.a; atol = 1e-13)
-            push!(run, seg.b)
-        else
-            length(run) >= 2 && push!(out, Polyline(run))
-            run = [seg.a, seg.b]
-        end
-    end
-    length(run) >= 2 && push!(out, Polyline(run))
-    return out
-end
-
-clip_to_disk(prims::AbstractVector{<:Primitive}, D::Circle) =
-    reduce(vcat, (clip_to_disk(p, D) for p in prims); init = Primitive[])

@@ -7,6 +7,12 @@ DocMeta.setdocmeta!(Astrolabes, :DocTestSetup, :(using Astrolabes); recursive = 
 const titles = Dict(
     # "10-tutorials" => "Tutorials", # example folder title
     "91-developer.md" => "Developer docs",
+    "10-how-it-works.md" => "How it works",
+    "20-using.md" => "Using the library",
+    "30-fabrication.md" => "Fabrication",
+    "40-verification.md" => "Verification",
+    "50-gallery.md" => "Gallery",
+    "95-reference.md" => "Reference",
 )
 
 function recursively_list_pages(folder; path_prefix = "")
