@@ -45,6 +45,7 @@ function write_svg(
     widths::Vector{Float64};
     margin = 3.0,
     calibration::Bool = false,
+    background::Union{Nothing,String} = nothing,
 )
     allp = reduce(vcat, [collect(Primitive, l[2]) for l in layers]; init = Primitive[])
     x1, y1, x2, y2 = bounds(allp)
@@ -86,6 +87,20 @@ function write_svg(
             "\">",
         )
         println(io, "  <title>", title, "</title>")
+        background === nothing || println(
+            io,
+            "  <rect x=\"",
+            fmt(x1 - margin),
+            "\" y=\"",
+            fmt(-y2 - margin),
+            "\" width=\"",
+            fmt(w),
+            "\" height=\"",
+            fmt(h),
+            "\" rx=\"4\" fill=\"",
+            background,
+            "\"/>",
+        )
         for ((name, prims), c, sw) in zip(layers, colors, widths)
             isempty(prims) && continue
             println(
@@ -378,21 +393,29 @@ function write_bom(path, a::Astrolabe, ps::Vector{Part}, profile::Profile)
 end
 
 """
-    render_preview(a::Astrolabe, path; rete_rotation = 0.0) -> String
+    render_preview(a::Astrolabe, path; side = :both, rete_rotation = 30,
+                   rule_rotation = -50, alidade_rotation = 35) -> String
 
-An assembled front view (mater, limb, first plate, rete turned by `rete_rotation`
-degrees, and the rule) as one SVG, for documentation; not for fabrication.
+An assembled view of the instrument as one SVG, for documentation; not for fabrication.
+`side = :front` shows the mater, limb, first plate, the rete and the rule; `:back` the
+back of the mater with the alidade; `:both` the two faces side by side. Rotations are in
+degrees.
 """
 function render_preview(
     a::Astrolabe,
     path::AbstractString;
+    side::Symbol = :both,
     rete_rotation::Real = 30.0,
     rule_rotation::Real = -50.0,
+    alidade_rotation::Real = 35.0,
     tol::Real = 2e-5,
 )
+    side in (:front, :back, :both) ||
+        throw(ArgumentError("side must be :front, :back or :both"))
     ps = Dict(p.name => p for p in parts(a; tol))
     s = a.scale
     θr, θu = deg2rad(rete_rotation), deg2rad(rule_rotation)
+    θa = deg2rad(alidade_rotation)
     sc(prims) = Primitive[scale(p, s) for p in prims]
     txt(p) = Primitive[scale(q, s) for l in p.labels for q in label_strokes(l)]
     plate = ps[first(k for k in keys(ps) if startswith(k, "plate_"))]
@@ -410,21 +433,38 @@ function render_preview(
     end
     thin(p::Primitive) = p
     rot(prims, θ) = Primitive[thin(rotate(p, θ)) for p in prims]
-    layers = [
-        "mater" => rot(sc(contour_prims(ps["mater"].solid)), 0.0),
+    mater = ps["mater"]
+    alidade = ps["alidade"]
+    outline = rot(sc(contour_prims(mater.solid)), 0.0)
+    front = [
+        "mater" => outline,
         "limb" =>
             rot([sc(limb.engrave); txt(limb); sc(contour_prims(limb.solid))], 0.0),
         "plate" => rot([sc(plate.engrave); txt(plate)], 0.0),
         "rete" => rot([sc(contour_prims(rete.solid)); sc(rete.engrave); txt(rete)], θr),
         "rule" => rot([sc(contour_prims(rule.solid)); sc(rule.engrave); txt(rule)], θu),
     ]
-    write_svg(
-        path,
-        string(a),
-        layers,
-        ["#5a4a2a", "#3a2a10", "#55606e", "#a8321e", "#202020"],
-        [0.35, 0.2, 0.15, 0.3, 0.3],
-    )
+    back = [
+        "mater_back" => outline,
+        "back" => rot([sc(mater.engrave); txt(mater)], 0.0),
+        "alidade" => rot([sc(contour_prims(alidade.solid)); sc(alidade.score)], θa),
+    ]
+    front_colors = ["#5a4a2a", "#3a2a10", "#55606e", "#a8321e", "#202020"]
+    front_widths = [0.35, 0.2, 0.15, 0.3, 0.3]
+    back_colors = ["#5a4a2a", "#3a2a10", "#202020"]
+    back_widths = [0.35, 0.2, 0.3]
+    layers, colors, widths = if side === :front
+        front, front_colors, front_widths
+    elseif side === :back
+        back, back_colors, back_widths
+    else
+        # the back to the right of the front, with a gap of a tenth of the diameter
+        shift = Pt(1.1 * a.diameter_mm, 0.0)
+        moved = [k => Primitive[translate(p, shift) for p in v] for (k, v) in back]
+        [front; moved], [front_colors; back_colors], [front_widths; back_widths]
+    end
+    # a parchment ground so the preview reads on light and dark pages alike
+    write_svg(path, string(a), layers, colors, widths; background = "#f6efdf")
     # a preview needs no micrometre precision: keep the file small
     s = read(path, String)
     write(path, replace(s, r"(-?\d+\.\d\d)\d+" => s"\1"))

@@ -15,7 +15,7 @@ epoch. Every line is verified against spherical astronomy, the finished instrume
 operated in simulation against closed-form answers, and the parts are checked against
 the rules of the shop that will make them.
 
-<p align="center"><img src="docs/src/assets/gallery/zurich.svg" width="480" alt="An astrolabe for Zürich"></p>
+<p align="center"><img src="docs/src/assets/gallery/zurich.svg" width="820" alt="An astrolabe for Zürich, front and back"></p>
 
 ```julia
 using Astrolabes

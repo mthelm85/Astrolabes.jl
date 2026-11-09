@@ -143,6 +143,13 @@ end
     @test occursin("width=\"", svg) && occursin("mm\"", svg)
     preview = render_preview(A47, joinpath(dir, "preview.svg"))
     @test isfile(preview)
+    both = read(preview, String)
+    @test occursin("<g id=\"rete\"", both) && occursin("<g id=\"back\"", both)
+    front = read(render_preview(A47, joinpath(dir, "f.svg"); side = :front), String)
+    @test occursin("<g id=\"rete\"", front) && !occursin("<g id=\"back\"", front)
+    back = read(render_preview(A47, joinpath(dir, "b.svg"); side = :back), String)
+    @test occursin("<g id=\"alidade\"", back) && !occursin("<g id=\"rete\"", back)
+    @test_throws ArgumentError render_preview(A47, joinpath(dir, "x.svg"); side = :top)
 end
 
 @testitem "Golden geometry read back from the DXF" tags = [:render, :verify] setup =

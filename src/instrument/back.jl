@@ -227,13 +227,15 @@ function Back(;
         push!(pts, polar(r0 + kE * equation_of_time(dd.jd), dd.angle))
     end
     eot = Polyline(pts, true)
-    grid = Primitive[Circle(O, r0 + kE * m) for m in (-15, -10, -5, 0, 5, 10, 15)]
-    push!(engrave, eot)
-    append!(engrave, grid)
-    # label the grid every 5, 10 or 15 minutes, as the ring's width allows
+    # grid circles and their labels every 5, 10 or 15 minutes, as the ring's width allows,
+    # always including the zero line
     eh = max(min(label_h * 0.7, 3.5kE), min_text)
     estep = 5kE >= eh + mm(0.4) ? 5 : 10kE >= eh + mm(0.4) ? 10 : 15
-    for m = -15:estep:15
+    grid_values = [m for m = -15:5:15 if m % estep == 0]
+    grid = Primitive[Circle(O, r0 + kE * m) for m in grid_values]
+    push!(engrave, eot)
+    append!(engrave, grid)
+    for m in grid_values
         push!(
             labels,
             Label(

@@ -1,6 +1,8 @@
 # [Gallery](@id gallery)
 
-Each instrument below passed `verify` (geometry, use and fabrication checks) before its
+Each instrument is shown front (left: plate, rete and rule) and back (right: the mater's
+altitude scale, zodiac, calendar, equation of time, shadow square and unequal hours, with
+the alidade). Each passed `verify` (geometry, use and fabrication checks) before its
 preview was drawn. Rebuild them with `julia --project=. examples/gallery.jl`.
 
 ## Zürich (47.3°N), hour scale in CET

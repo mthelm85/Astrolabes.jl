@@ -9,7 +9,7 @@ epoch. Every drawn line is checked against spherical astronomy, the finished ins
 operated in simulation and compared with closed-form answers, and the parts are checked
 against the rules of the shop that will make them.
 
-![An astrolabe for Zürich](assets/gallery/zurich.svg)
+![An astrolabe for Zürich, front and back](assets/gallery/zurich.svg)
 
 ## Quick start
 
