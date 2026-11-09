@@ -9,7 +9,9 @@ preview was drawn. Rebuild them with `julia --project=. examples/gallery.jl`.
 astrolabe(47.3; longitude = 8.54, timezone = 1.0)
 ```
 
-![Zürich](assets/gallery/zurich.svg)
+```@raw html
+<img src="../assets/gallery/zurich.svg" alt="Zürich">
+```
 
 ## London (51.5°N), brass
 
@@ -17,7 +19,9 @@ astrolabe(47.3; longitude = 8.54, timezone = 1.0)
 astrolabe(51.5; profile = Metal())
 ```
 
-![London](assets/gallery/london.svg)
+```@raw html
+<img src="../assets/gallery/london.svg" alt="London">
+```
 
 ## Oxford 1391 (51.75°N), after Chaucer's *Treatise on the Astrolabe*
 
@@ -25,7 +29,9 @@ astrolabe(51.5; profile = Metal())
 astrolabe(51.75; epoch = 1391.0, calendar = :eccentric, names = :traditional)
 ```
 
-![Oxford 1391](assets/gallery/chaucer.svg)
+```@raw html
+<img src="../assets/gallery/chaucer.svg" alt="Oxford 1391">
+```
 
 ## Sydney (33.9°S)
 
@@ -33,7 +39,9 @@ astrolabe(51.75; epoch = 1391.0, calendar = :eccentric, names = :traditional)
 astrolabe(-33.9)
 ```
 
-![Sydney](assets/gallery/sydney.svg)
+```@raw html
+<img src="../assets/gallery/sydney.svg" alt="Sydney">
+```
 
 ## The equator, the tropic and the Arctic Circle
 
@@ -41,6 +49,12 @@ astrolabe(-33.9)
 astrolabe(0.0); astrolabe(23.4); astrolabe(66.0)
 ```
 
-![Equator](assets/gallery/equator.svg)
-![Tropic of Cancer](assets/gallery/tropic.svg)
-![Arctic Circle](assets/gallery/arctic.svg)
+```@raw html
+<img src="../assets/gallery/equator.svg" alt="Equator">
+```
+```@raw html
+<img src="../assets/gallery/tropic.svg" alt="Tropic of Cancer">
+```
+```@raw html
+<img src="../assets/gallery/arctic.svg" alt="Arctic Circle">
+```

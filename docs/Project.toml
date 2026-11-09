@@ -1,10 +1,12 @@
 [deps]
+Astrolabes = "857b687c-da67-4272-b138-824a8c9580ac"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 LiveServer = "16fef848-5104-11e9-1b77-fb7a48bbb589"
-Astrolabes = "857b687c-da67-4272-b138-824a8c9580ac"
-
-[compat]
-Documenter = "1"
+MaterialDocs = "10bdffc8-969c-4dd4-83f3-742518eccd6b"
 
 [sources]
 Astrolabes = {path = ".."}
+
+[compat]
+Documenter = "1"
+MaterialDocs = "0.2"

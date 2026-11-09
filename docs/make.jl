@@ -1,5 +1,6 @@
 using Astrolabes
 using Documenter
+using MaterialDocs
 
 DocMeta.setdocmeta!(Astrolabes, :DocTestSetup, :(using Astrolabes); recursive = true)
 
@@ -69,8 +70,12 @@ makedocs(;
     authors = "Matt Helm <mthelm85@gmail.com>",
     repo = "https://github.com/mthelm85/Astrolabes.jl/blob/{commit}{path}#{line}",
     sitename = "Astrolabes.jl",
-    format = Documenter.HTML(; canonical = "https://mthelm85.github.io/Astrolabes.jl"),
+    format = Material3(;
+        theme = :amber_workshop,
+        dark_mode = :toggle,
+        canonical = "https://mthelm85.github.io/Astrolabes.jl",
+    ),
     pages = list_pages(),
 )
 
-deploydocs(; repo = "github.com/mthelm85/Astrolabes.jl")
+deploydocs(; repo = "github.com/mthelm85/Astrolabes.jl", devbranch = "main")
