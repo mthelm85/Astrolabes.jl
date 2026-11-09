@@ -1,0 +1,13 @@
+# Changes here will be overwritten by Copier
+AddPrecommitUpdateCI: false
+Authors: Matt Helm <mthelm85@gmail.com>
+JuliaMinVersion: '1.10'
+License: MIT
+LicenseCopyrightHolders: Matt Helm
+PackageName: Astrolabes
+PackageOwner: mthelm85
+PackageUUID: 857b687c-da67-4272-b138-824a8c9580ac
+StrategyConfirmIncluded: false
+StrategyLevel: 2
+StrategyReviewExcluded: false
+_src_path: C:\Users\mthel\.julia\packages\BestieTemplate\MPEqY

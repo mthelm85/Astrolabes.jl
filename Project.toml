@@ -1,0 +1,10 @@
+name = "Astrolabes"
+uuid = "857b687c-da67-4272-b138-824a8c9580ac"
+authors = ["Matt Helm <mthelm85@gmail.com>"]
+version = "0.1.0"
+
+[workspace]
+projects = ["test", "docs"]
+
+[compat]
+julia = "1.10"
