@@ -8,3 +8,14 @@
 [![Docs workflow Status](https://github.com/mthelm85/Astrolabes.jl/actions/workflows/Docs.yml/badge.svg?branch=main)](https://github.com/mthelm85/Astrolabes.jl/actions/workflows/Docs.yml?query=branch%3Amain)
 [![BestieTemplate](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/JuliaBesties/BestieTemplate.jl/main/docs/src/assets/badge.json)](https://github.com/JuliaBesties/BestieTemplate.jl)
 
+
+
+Geometrically exact, fabrication-ready astrolabes for any latitude and epoch, with built-in verification of every drawn line against spherical astronomy.
+
+```julia
+using Astrolabes
+plate = Plate(47.3)
+verify(plate)
+render_svg(plate, "plate.svg"; diameter_mm = 150)
+```
+

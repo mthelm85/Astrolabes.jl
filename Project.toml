@@ -1,10 +1,20 @@
 name = "Astrolabes"
 uuid = "857b687c-da67-4272-b138-824a8c9580ac"
-authors = ["Matt Helm <mthelm85@gmail.com>"]
 version = "0.1.0"
+authors = ["Matt Helm <mthelm85@gmail.com>"]
 
 [workspace]
 projects = ["test", "docs"]
 
+[deps]
+AstroAngles = "5c4adb95-c1fc-4c53-b4ea-2a94080c53d2"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+SOFA = "ad3d3fd0-b5f2-51ee-b274-8cdbe62317e2"
+
 [compat]
+AstroAngles = "0.3"
+LinearAlgebra = "1"
+Printf = "1"
+SOFA = "2"
 julia = "1.10"
