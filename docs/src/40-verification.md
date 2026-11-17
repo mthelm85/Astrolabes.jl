@@ -41,6 +41,15 @@ the instrument's sunrise for Zürich in zone time (with the equation of time rea
 back) with an independent solar ephemeris (SolarPosition.jl): they agree within the
 Sun's motion between noon, for which the calendar is drawn, and sunrise.
 
+## Balance and sighting
+
+The altitude read with the alidade is only right if the instrument hangs level. With
+masses in proportion to each part's area, `verify` checks that, hung from the shackle
+with the rete parked at [`balanced_rete_angle`](@ref), the instrument hangs level, and
+that turning the rule or the alidade (with its vanes) does not tilt it. It also checks
+that nothing is engraved in the ring where the vanes stand, that the vanes fit in it, and
+that both pinholes lie on the alidade's fiducial line.
+
 ## Fabrication
 
 For the instrument's profile, every part is checked to be one piece, to have no bridge

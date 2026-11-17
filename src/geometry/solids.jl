@@ -180,3 +180,5 @@ end
 translate(s::Shape, v::Pt) = Shape([[p + v for p in c] for c in s.contours])
 rotate(s::Shape, θ::Real) = Shape([[rotate(p, θ) for p in c] for c in s.contours])
 scale(s::Shape, k::Real) = Shape([[k * p for p in c] for c in s.contours])
+"Mirror image of a shape in the y axis (x → −x), with each contour's orientation kept."
+mirror_shape(s::Shape) = Shape([reverse([Pt(-p.x, p.y) for p in c]) for c in s.contours])

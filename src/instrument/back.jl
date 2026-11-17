@@ -37,7 +37,9 @@ end
     Back
 
 The back of the mater. Scales are [`CircularScale`](@ref)s or explicit geometry, all
-centred on the origin except an eccentric calendar ring.
+centred on the origin except an eccentric calendar ring. Between the equation-of-time
+ring and the inner diagrams a ring of width `vane_band` centred on `vane_radius` is left
+blank: the alidade's sight vanes stand there, so they never hide a reading.
 """
 struct Back
     altitude::CircularScale
@@ -61,6 +63,8 @@ struct Back
     sine_quadrant::Vector{Tuple{Symbol,Int,Primitive}}
     sine_divisions::Int
     sine_radius::Float64
+    vane_radius::Float64
+    vane_band::Float64
     engrave::Vector{Primitive}
     labels::Vector{Label}
 end
@@ -77,6 +81,7 @@ function Back(;
     shadow_base::Integer = 12,
     sine_quadrant::Bool = false,
     sine_divisions::Integer = 30,
+    vane_band = 0.0,
     tol = 2e-5,
 )
     s = scale
@@ -93,7 +98,9 @@ function Back(;
     r_zod = (r_alt[1] - 7.0k, r_alt[1])
     r_cal = (r_zod[1] - 8.5k, r_zod[1])
     r_eot = (r_cal[1] - 8.5k, r_cal[1] - 0.6k)
-    r_inner = r_eot[1] - 1.2k
+    # blank ring for the sight vanes, then the inner diagrams
+    r_vane = r_eot[1] - 0.3k - vane_band / 2
+    r_inner = vane_band > 0 ? r_vane - vane_band / 2 - 0.3k : r_eot[1] - 1.2k
 
     # altitude scale: two upper quadrants, 0° on the horizontal, 90° at the top
     alt_vals = Float64[]
@@ -351,6 +358,8 @@ function Back(;
         sq_lines,
         sine_divisions,
         r_inner,
+        r_vane,
+        Float64(vane_band),
         engrave,
         labels,
     )

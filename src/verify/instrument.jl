@@ -249,9 +249,28 @@ function fabrication_checks(a::Astrolabe, profile::Profile; tol::Real = 2e-5)
     out = CurveCheck[]
     mf = profile.min_feature
     hole_min = max(min_hole(profile), 0.0)
-    for part in parts(a; tol)
+    ps = parts(a; tol)
+    for part in ps
         nm = part.name
         solid = part.solid
+        if !isempty(part.pocket.contours)
+            # every plate drops into the pocket (drawn as seen from the back, so mirrored
+            # back to the front), keyed by its notch, and the pocket is as deep as the plates
+            pk = mirror_shape(part.pocket)
+            out_mm2 = [
+                shape_area(shape_difference(p.solid, pk)) * s^2 for
+                p in ps if startswith(p.name, "plate_")
+            ]
+            push!(out, CurveCheck("$nm: plates fit the pocket (mm² outside)", out_mm2, 1e-6))
+            push!(
+                out,
+                CurveCheck(
+                    "$nm: pocket as deep as the plates (mm)",
+                    [abs(part.pocket_depth - length(a.plates) * profile.thickness)],
+                    1e-9,
+                ),
+            )
+        end
         push!(
             out,
             CurveCheck("$nm: one piece", [abs(length(components(solid)) - 1.0)], 0.0),
@@ -333,6 +352,9 @@ Check the whole instrument:
   unequal-hour circles, sine quadrant;
 - the instrument in use (see [`simulate`](@ref)): sunrise/sunset, time from altitude and
   star transits read off the drawn geometry, against closed-form spherical astronomy;
+- balance (see [`hanging_tilt`](@ref)): hung by its shackle with the rete parked, the
+  instrument hangs level, and turning the rule or alidade does not tilt it; the sight
+  vanes stand in a blank ring with their pinholes on the alidade's fiducial line;
 - with `fabrication = true`, the parts against `a.profile`: one piece each, no bridge
   narrower than the minimum feature, hole sizes, text height, text inside the edges,
   no overlapping text.
@@ -349,6 +371,7 @@ function verify(a::Astrolabe; tol::Real = 1e-9, n::Integer = 720, fabrication::B
     append!(checks, scale_checks(a; tol))
     append!(checks, back_checks(a; tol, n))
     append!(checks, simulation_checks(a))
+    append!(checks, balance_checks(a))
     fabrication && append!(checks, fabrication_checks(a, a.profile))
     return VerificationReport(string(a), checks)
 end

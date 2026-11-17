@@ -47,6 +47,7 @@ include("instrument/astrolabe.jl")
 include("verify/report.jl")
 include("verify/geometric.jl")
 include("verify/simulate.jl")
+include("verify/balance.jl")
 include("verify/instrument.jl")
 include("render/svg.jl")
 include("render/fabricate.jl")
@@ -70,5 +71,6 @@ export Rete, ReteStyle, Mater, Back, Rule, Alidade
 export catalog_stars, find_star, traditional_name
 export Simulator, simulate, sunrise, sunset, star_rise, star_set, star_transit
 export time_from_altitude, sunrise_azimuth, calendar_longitude, eot_reading, error_budget
+export hanging_tilt, balanced_rete_angle, balanced_rete_longitude
 
 end

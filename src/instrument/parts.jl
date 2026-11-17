@@ -1,11 +1,16 @@
 # Physical parts: material (cut) plus engraved lines and labels.
 
 """
-    Part(name, solid, engrave, score, labels; quantity = 1, face = :front)
+    Part(name, solid, engrave, score, labels; quantity = 1, face = :front,
+         pocket = Shape(), pocket_depth = 0, artwork_for = "")
 
 One piece to fabricate. `solid` is the material (its contours are the cut paths),
 `engrave` and `score` are lines on its surface, `labels` engraved text. All geometry is
 in plate units; multiply by the astrolabe's `scale` for millimetres.
+
+`pocket` is a recess in the front face, `pocket_depth` millimetres deep (the one-piece
+mater). A part with `artwork_for` set is not a piece of its own but the artwork for
+another part's face (the front of a one-piece mater, around its pocket).
 """
 struct Part
     name::String
@@ -15,17 +20,33 @@ struct Part
     labels::Vector{Label}
     quantity::Int
     face::Symbol
+    pocket::Shape
+    pocket_depth::Float64
+    artwork_for::String
 end
-Part(name, solid, engrave, score, labels; quantity::Integer = 1, face::Symbol = :front) =
-    Part(
-        String(name),
-        solid,
-        Primitive[engrave...],
-        Primitive[score...],
-        Label[labels...],
-        quantity,
-        face,
-    )
+Part(
+    name,
+    solid,
+    engrave,
+    score,
+    labels;
+    quantity::Integer = 1,
+    face::Symbol = :front,
+    pocket::Shape = Shape(),
+    pocket_depth::Real = 0.0,
+    artwork_for::AbstractString = "",
+) = Part(
+    String(name),
+    solid,
+    Primitive[engrave...],
+    Primitive[score...],
+    Label[labels...],
+    quantity,
+    face,
+    pocket,
+    Float64(pocket_depth),
+    String(artwork_for),
+)
 
 """
     mater_outline(r, throne_width, throne_height, hole_r; tol) -> Shape

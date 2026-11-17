@@ -36,6 +36,7 @@ struct Astrolabe
     location::Union{Nothing,Location}
     pin_radius::Float64
     label_mm::Float64
+    mater_style::Symbol
 end
 
 """
@@ -58,7 +59,11 @@ Keywords:
   `unequal_hours = :exact`: plate options (see [`Plate`](@ref));
 - `calendar = :concentric` or `:eccentric`; `shadow_base = 12` or `7`;
   `sine_quadrant = false`; `hours = :h24` or `:h12`;
-- `rete_style`: a [`ReteStyle`](@ref) (defaults adapt to the profile).
+- `rete_style`: a [`ReteStyle`](@ref) (defaults adapt to the profile);
+- `mater = :stacked`: the mater as a flat disk with the limb ring glued on top, which
+  any sheet process can cut; or `:single`, one piece with a pocket for the plates in
+  its front face, for 3D printing or milling. The files then carry the pocket outline
+  on a `POCKET` layer, and `mater_front` is the artwork for the front face around it.
 """
 function astrolabe(
     latitude;
@@ -80,8 +85,12 @@ function astrolabe(
     sine_quadrant::Bool = false,
     hours::Symbol = :h24,
     rete_style::Union{Nothing,ReteStyle} = nothing,
+    mater::Symbol = :stacked,
     tol::Real = 2e-5,
 )
+    mater in (:stacked, :single) || throw(ArgumentError("mater must be :stacked or :single"))
+    mater === :single && profile isa PCB &&
+        throw(ArgumentError("a PCB cannot have a pocket; use mater = :stacked"))
     φ = latitude isa AbstractString ? parse_latitude(latitude) : Float64(latitude)
     ep = if epoch isa Epoch
         calendar_system === nothing ? epoch : Epoch(epoch.year, calendar_system)
@@ -154,7 +163,7 @@ function astrolabe(
     )
 
     offset = loc === nothing ? 0.0 : (loc.timezone * 15 - loc.longitude) / 15
-    mater = Mater(
+    mat = Mater(
         P;
         radius = mm(r_m_mm),
         ring_inner = mm(ring_in_mm),
@@ -177,6 +186,9 @@ function astrolabe(
         calendar_kind = calendar,
         shadow_base,
         sine_quadrant,
+        # blank ring for the vanes and their pads: the vane's thickness and a wall on
+        # either side of its slot
+        vane_band = mm(fp.thickness + 2max(1.0, fp.min_feature + 0.2)),
         tol,
     )
     rule = Rule(
@@ -199,6 +211,8 @@ function astrolabe(
         scale = s,
         pin_radius = pin_r,
         thickness_mm = fp.thickness,
+        vane_radius = back.vane_radius,
+        vane_band = back.vane_band,
         width_mm = max(
             10.0,
             5mf,
@@ -214,13 +228,14 @@ function astrolabe(
         fp,
         plates,
         rete,
-        mater,
+        mat,
         back,
         rule,
         alidade,
         loc,
         pin_r,
         label_mm,
+        mater,
     )
 end
 
@@ -241,12 +256,13 @@ function Base.show(io::IO, a::Astrolabe)
 end
 
 """
-    parts(a::Astrolabe) -> Vector{Part}
+    parts(a::Astrolabe; engraving = true) -> Vector{Part}
 
 The pieces to fabricate: the mater (back engraving), the limb ring, each plate, the
-rete, the rule, the alidade and its two vanes.
+rete, the rule, the alidade and its two vanes. With `engraving = false` only the outlines
+are built (much faster), with no engraved lines or text.
 """
-function parts(a::Astrolabe; tol::Real = 2e-5)
+function parts(a::Astrolabe; tol::Real = 2e-5, engraving::Bool = true)
     s = a.scale
     mm(x) = x / s
     O = Pt(0, 0)
@@ -254,11 +270,19 @@ function parts(a::Astrolabe; tol::Real = 2e-5)
     pin = disk_shape(O, a.pin_radius; tol)
     notch, tab = key_shapes(m.ring_inner, m.plate_radius, s)
     margin = mm(a.profile.engrave_margin)
-    fit(prims, solid) = fit_engraving(prims, solid, margin; step = mm(0.05), tol)
-    txt(labels) = at_least(labels, mm(a.profile.min_text))
+    fit(prims, solid) =
+        engraving ? fit_engraving(prims, solid, margin; step = mm(0.05), tol) : Primitive[]
+    txt(labels) = engraving ? at_least(labels, mm(a.profile.min_text)) : Label[]
     out = Part[]
     # mater: the base disk, engraved on its back
     msolid = shape_difference(m.outline, pin)
+    ring = shape_union(shape_difference(m.outline, disk_shape(O, m.ring_inner; tol)), tab)
+    single = a.mater_style === :single
+    # one piece: the plates sit in a pocket in its front face (the limb ring's hole, keyed
+    # by the same tab), as deep as the plates are thick. The mater is drawn as seen from
+    # the back, so the pocket is mirrored into that frame.
+    pocket = single ? mirror_shape(shape_difference(disk_shape(O, m.ring_inner; tol), tab)) :
+        Shape()
     push!(
         out,
         Part(
@@ -268,22 +292,25 @@ function parts(a::Astrolabe; tol::Real = 2e-5)
             Primitive[],
             txt(a.back.labels);
             face = :back,
+            pocket,
+            pocket_depth = single ? a.profile.thickness * length(a.plates) : 0.0,
         ),
     )
-    # limb ring with its hour and degree scales and the plate key tab
-    ring = shape_union(shape_difference(m.outline, disk_shape(O, m.ring_inner; tol)), tab)
+    # limb ring with its hour and degree scales and the plate key tab: a ring glued on the
+    # mater, or the artwork for the front face of the one-piece mater around its pocket
     push!(
         out,
         Part(
-            "limb",
+            single ? "mater_front" : "limb",
             ring,
             fit([scale_prims(m.hours); scale_prims(m.degrees)], ring),
             Primitive[],
-            txt([m.hours.labels; m.degrees.labels]),
+            txt([m.hours.labels; m.degrees.labels]);
+            artwork_for = single ? "mater" : "",
         ),
     )
     # with several plates, plain spacer rings raise the limb to the height of the stack
-    length(a.plates) > 1 && push!(
+    !single && length(a.plates) > 1 && push!(
         out,
         Part(
             "limb_spacer",
@@ -320,12 +347,12 @@ function parts(a::Astrolabe; tol::Real = 2e-5)
             "rule",
             ru.solid,
             fit(Primitive[last(t) for t in ru.ticks], ru.solid),
-            fit(Primitive[ru.fiducial], ru.solid),
+            Primitive[],                # the cut edge is the reading line
             txt(ru.labels),
         ),
     )
     al = a.alidade
-    push!(out, Part("alidade", al.solid, Primitive[], fit(al.fiducial, al.solid), Label[]))
+    push!(out, Part("alidade", al.solid, Primitive[], Primitive[], Label[]))
     push!(out, Part("vane", al.vane, Primitive[], Primitive[], Label[]; quantity = 2))
     return out
 end

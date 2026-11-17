@@ -7,6 +7,7 @@ struct Drawing
     engrave::Vector{Primitive}
     score::Vector{Primitive}
     text::Vector{Primitive}
+    pocket::Vector{Primitive}
 end
 
 """
@@ -23,7 +24,8 @@ function drawing(part::Part, s::Real, profile::Profile; tol::Real = 2e-5)
     eng = Primitive[scale(p, s) for p in part.engrave]
     sc = Primitive[scale(p, s) for p in part.score]
     txt = Primitive[scale(p, s) for l in part.labels for p in label_strokes(l)]
-    return Drawing(part.name, cut, eng, sc, txt)
+    pk = Primitive[scale(p, s) for p in contour_prims(part.pocket)]
+    return Drawing(part.name, cut, eng, sc, txt, pk)
 end
 
 function bounds(prims; tol = 1e-3)
@@ -188,6 +190,7 @@ const DXF_COLORS = Dict(
     "CUT" => 1,
     "ENGRAVE" => 7,
     "SCORE" => 5,
+    "POCKET" => 3,
     "TEXT" => 7,
     "Edge_Cuts" => 2,
     "F_Cu" => 1,
@@ -241,6 +244,7 @@ end
 
 cut_width(::Profile) = 0.01
 cut_width(p::Paper) = p.stroke
+pocket_color(p::Profile) = get(p.colors, :pocket, "#00a000")
 
 function write_part(dir, d::Drawing, profile::Profile, formats)
     out = String[]
@@ -266,7 +270,13 @@ function write_part(dir, d::Drawing, profile::Profile, formats)
         )
     elseif split_layers(profile)
         groups = [
-            ("cut", ["CUT" => d.cut], [c[:cut]], [cut_width(profile)]),
+            isempty(d.pocket) ? ("cut", ["CUT" => d.cut], [c[:cut]], [cut_width(profile)]) :
+            (
+                "cut",
+                ["CUT" => d.cut, "POCKET" => d.pocket],
+                [c[:cut], pocket_color(profile)],
+                [cut_width(profile), cut_width(profile)],
+            ),
             (
                 "engrave",
                 ["ENGRAVE" => marks, "SCORE" => d.score],
@@ -290,9 +300,15 @@ function write_part(dir, d::Drawing, profile::Profile, formats)
             )
         end
     else
-        layers = ["CUT" => d.cut, "ENGRAVE" => marks, "SCORE" => d.score]
-        cols = [c[:cut], c[:engrave], c[:score]]
-        ws = [cut_width(profile), sw, sw]
+        layers = ["CUT" => d.cut, "POCKET" => d.pocket, "ENGRAVE" => marks, "SCORE" => d.score]
+        cols = [c[:cut], pocket_color(profile), c[:engrave], c[:score]]
+        ws = [cut_width(profile), cut_width(profile), sw, sw]
+        # write the POCKET layer only where there is one, so other files are unchanged
+        if isempty(d.pocket)
+            deleteat!(layers, 2)
+            deleteat!(cols, 2)
+            deleteat!(ws, 2)
+        end
         :dxf in formats && push!(out, write_dxf(joinpath(dir, "$(d.name).dxf"), layers))
         :svg in formats && push!(
             out,
@@ -359,12 +375,24 @@ function write_bom(path, a::Astrolabe, ps::Vector{Part}, profile::Profile)
             x1, y1, x2, y2 = bounds(contour_prims(p.solid))
             sz = @sprintf("%.1f x %.1f", (x2 - x1) * a.scale, (y2 - y1) * a.scale)
             note =
+                p.pocket_depth > 0 ?
+                @sprintf(
+                    "one piece %.1f mm thick; pocket Ø%.1f mm, %.1f mm deep in the front (POCKET layer); back face drawn as seen from the back",
+                    profile.thickness + p.pocket_depth,
+                    2a.mater.ring_inner * a.scale,
+                    p.pocket_depth
+                ) :
+                !isempty(p.artwork_for) ?
+                "not a separate piece: artwork for the $(p.artwork_for)'s front face around the pocket" :
                 p.face === :back ? "engrave the back face (drawn as seen from the back)" :
                 p.name == "limb" ?
                 "glued or riveted onto the mater; the tab keys the plates" :
                 p.name == "limb_spacer" ? "plain ring under the engraved limb" :
-                p.name == "vane" ? "sight vanes; tabs press into the alidade slots" : ""
-            println(io, rpad(p.name, 16), rpad(string(p.quantity), 5), rpad(sz, 18), note)
+                p.name == "vane" ?
+                "sight vanes; tabs press into the alidade slots, the pinholes over the edge" :
+                ""
+            qty = isempty(p.artwork_for) ? string(p.quantity) : "-"
+            println(io, rpad(p.name, 16), rpad(qty, 5), rpad(sz, 18), note)
         end
         println(io)
         println(
@@ -375,11 +403,19 @@ function write_bom(path, a::Astrolabe, ps::Vector{Part}, profile::Profile)
             round(Int, profile.pin_diameter),
             " bolt or a rivet):",
         )
-        println(io, "  rule, rete, plate(s) inside the limb ring, mater, alidade.")
-        println(
-            io,
-            "The plates' notch fits the limb's key tab, so the meridian stays upright.",
-        )
+        if a.mater_style === :single
+            println(io, "  rule, rete, plate(s) in the mater's pocket, mater, alidade.")
+            println(
+                io,
+                "The plates' notch fits the key tab in the pocket, so the meridian stays upright.",
+            )
+        else
+            println(io, "  rule, rete, plate(s) inside the limb ring, mater, alidade.")
+            println(
+                io,
+                "The plates' notch fits the limb's key tab, so the meridian stays upright.",
+            )
+        end
         a.location === nothing || println(
             io,
             @sprintf(
@@ -388,6 +424,22 @@ function write_bom(path, a::Astrolabe, ps::Vector{Part}, profile::Profile)
                 a.location.timezone
             )
         )
+        # sighting: the rete is the one part that does not balance on the pin
+        m = mass_model(a)
+        worst = maximum(
+            abs(hanging_tilt(m, θ, 0.0, -π / 2)) for θ in range(0, 2π; length = 73)
+        )
+        λ = balanced_rete_longitude(a)
+        place = @sprintf(
+            "%d° %s",
+            floor(Int, mod(λ, 30)),
+            SIGN_NAMES[floor(Int, mod(λ, 360) / 30)+1]
+        )
+        println(io)
+        println(io, "Before sighting the Sun or a star, park the rete: turn it until $place")
+        println(io, "on the ecliptic ring points straight down, or loosen the nut so the rete")
+        println(io, "hangs free. Left anywhere else it can tilt the hanging instrument by up to")
+        println(io, @sprintf("%.2f°, and every altitude read with the alidade by as much.", worst))
     end
     return path
 end
@@ -421,7 +473,7 @@ function render_preview(
     plate = ps[first(k for k in keys(ps) if startswith(k, "plate_"))]
     rete = ps["rete"]
     rule = ps["rule"]
-    limb = ps["limb"]
+    limb = get(ps, "limb", get(ps, "mater_front", nothing))
     # previews only: drop polyline vertices closer than 0.15 mm (invisible at this scale)
     function thin(p::Polyline)
         pts = Pt[p.pts[1]]

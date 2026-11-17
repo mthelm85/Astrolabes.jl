@@ -76,6 +76,65 @@ end
     @test occursin("47.3", sprint(show, a))
 end
 
+@testitem "Rule, alidade and balance" tags = [:instrument, :verify] setup = [Instrument] begin
+    using Astrolabes: rotate, shape_area, shape_intersection, shape_union, Pt
+    a = A47
+    # counterchanged parts are symmetric under a half turn about the pin
+    for sol in (a.rule.solid, a.alidade.solid)
+        turned = rotate(sol, π)
+        asym = shape_area(shape_union(sol, turned)) - shape_area(shape_intersection(sol, turned))
+        @test asym / shape_area(sol) < 1e-3
+    end
+    # the fiducial edge runs through the pin; the vane pinholes lie on it
+    @test a.rule.fiducial.a.x == 0 && a.rule.fiducial.b.x == 0
+    for (o, θ) in a.alidade.vane_mounts
+        @test abs((o + rotate(Pt(a.alidade.vane_holes[1].x, 0.0), θ)).x) < 1e-12
+        @test abs(abs(o.y) - a.back.vane_radius) < 1e-12
+    end
+    # parked rete: turning the rule or alidade leaves the tilt unchanged, and it is small
+    θb = balanced_rete_angle(a)
+    t0 = hanging_tilt(a; rete = θb)
+    @test abs(t0) < 0.02
+    for (u, h) in ((90, 0), (33, 60), (200, 145))
+        @test hanging_tilt(a; rete = θb, rule = u, alidade = h) ≈ t0 atol = 1e-4
+    end
+    # elsewhere the rete does tilt it, by less than a degree
+    worst = maximum(abs(hanging_tilt(a; rete = x)) for x = 0:30:330)
+    @test 0.05 < worst < 1.0
+    @test 0 <= balanced_rete_longitude(a) < 360
+    dir = mktempdir()
+    render(a, dir; formats = (:svg,))
+    @test occursin("park the rete", read(joinpath(dir, "parts.txt"), String))
+end
+
+@testitem "One-piece mater" tags = [:instrument, :render] setup = [Instrument] begin
+    a = astrolabe(47.3; latitudes = (46.0,), mater = :single)
+    @test a.mater_style === :single
+    ps = parts(a)
+    names = [p.name for p in ps]
+    @test "mater_front" in names && !("limb" in names) && !("limb_spacer" in names)
+    m = only(p for p in ps if p.name == "mater")
+    @test !isempty(m.pocket.contours)
+    @test m.pocket_depth ≈ 2 * a.profile.thickness
+    @test only(p for p in ps if p.name == "mater_front").artwork_for == "mater"
+    r = verify(a)
+    @test Astrolabes.passed(r)
+    isempty(Astrolabes.failures(r)) || display(r)
+    @test any(c -> occursin("plates fit the pocket", c.label), r.checks)
+    dir = mktempdir()
+    render(a, dir)
+    @test any(e -> get(e, "layer", "") == "POCKET", dxf_entities(joinpath(dir, "mater.dxf")))
+    @test !any(e -> get(e, "layer", "") == "POCKET", dxf_entities(joinpath(dir, "plate_47p3N.dxf")))
+    bom = read(joinpath(dir, "parts.txt"), String)
+    @test occursin("pocket", bom) && occursin("not a separate piece", bom)
+    @test isfile(render_preview(a, joinpath(dir, "preview.svg")))
+    # same balance as the stacked instrument with the same parts
+    b = astrolabe(47.3; latitudes = (46.0,))
+    @test hanging_tilt(a; rete = 40) ≈ hanging_tilt(b; rete = 40) atol = 1e-6
+    @test_throws ArgumentError astrolabe(47.3; mater = :hollow)
+    @test_throws ArgumentError astrolabe(47.3; mater = :single, profile = PCB())
+end
+
 @testitem "Simulator agrees with closed-form astronomy" tags = [:simulate] setup =
     [Instrument] begin
     sim = simulate(A47)

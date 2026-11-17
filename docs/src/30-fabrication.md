@@ -55,6 +55,53 @@ rings raise the limb to the height of the stack.
 
 The mater's back is drawn as seen from the back, so engrave it face up.
 
+## One-piece mater (3D printing, milling)
+
+A historical mater is one piece: a thick disk with a pocket in its front for the plates,
+the raised rim around it being the limb. Sheet processes can only cut through, so by
+default the mater is a flat disk with the limb ring glued on top. A 3D printer or a mill
+can make the pocket directly:
+
+```julia
+a = astrolabe(47.3; mater = :single)
+render(a, "out")
+```
+
+Then `mater.dxf` carries the outline on `CUT` and the pocket outline (with the key tab
+that keeps the plates upright) on `POCKET`, and `parts.txt` gives the total thickness and
+the pocket's depth: one sheet thickness per plate. `mater_front` is not a piece of its
+own but the artwork for the front face around the pocket (the hour and degree scales),
+to engrave there or print and glue on.
+
+In a CAD program such as Fusion: import `mater.dxf`, extrude the outline by the total
+thickness, then cut the `POCKET` profile into the front face by the pocket depth. Mind
+that `mater.dxf` is drawn as seen from the back, so its front face is the one facing away
+from you.
+
+## The rule and the alidade
+
+Both are counterchanged, as on historical instruments. One straight edge runs the full
+length through the pin and is the reading line. The bar lies on one side of it in the
+upper half and on the other side in the lower half, so the ticks you read are always in
+view beside the edge, even in opaque material. The two halves balance on the pin.
+
+The sight vanes stand in a ring on the back that is left blank, so they never hide a
+reading. Only inside that ring does the alidade widen into a small pad that spans the
+edge; each vane, no wider than the bar, stands on its pad centred over the edge, with its
+pinhole right over it. The line of sight is then the reading line.
+
+## Sighting
+
+Hang the instrument from its shackle so that the altitude scale's horizontal diameter is
+level. Everything that turns on the pin balances except the rete, whose star pointers
+and off-centre ecliptic put its centre of mass a few millimetres off the pin. Before
+sighting, park the rete: `parts.txt` names the point of the ecliptic to turn straight
+down, which [`balanced_rete_longitude`](@ref) also returns. Or loosen the nut so the rete
+hangs free and settles there by itself. Left elsewhere, it tilts the instrument by up to
+about half a degree on a 150 mm instrument cut from one sheet, and every altitude is off
+by as much. [`hanging_tilt`](@ref) gives the tilt for any setting. A heavier mater
+(thicker sheet, or solid infill on a 3D print) reduces it.
+
 ## Before you order
 
 Print the `Paper` profile at 100 % and measure the calibration bar, then cut the parts
