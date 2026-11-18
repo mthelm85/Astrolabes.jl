@@ -338,7 +338,9 @@ function plate_elements(P, φ, ε, step, az_step, az_top, twilight, uh)
     return els
 end
 
-# Labels: almucantar altitudes along the meridian, azimuths just above the horizon,
+# Labels: almucantar altitudes along the meridian (south of the zenith where they fit,
+# north of the centre for the low ones that cross the south side beyond the limb), azimuths
+# just above the horizon,
 # unequal-hour numbers on the equator, and the latitude near the bottom of the plate.
 function plate_labels(P, φ, ε, els, h)
     labels = Label[]
@@ -347,7 +349,14 @@ function plate_labels(P, φ, ε, els, h)
     for el in els
         if el.kind === :almucantar && isapprox(mod(el.value, 10), 0; atol = 1e-9)
             y = cotd((φn + el.value) / 2)          # south crossing of the meridian
-            y + h < rl * 0.98 || continue
+            # low circles cross the meridian's south side beyond the limb: number them
+            # where they cross its north side instead, clear of the pin and the rete's hub
+            # (the label spans y to y + h)
+            if y + h >= rl * 0.98
+                y = -tand((φn - el.value) / 2)
+                hub = 4.2h
+                (y > hub || y + h < -hub) || continue
+            end
             push!(
                 labels,
                 Label(
