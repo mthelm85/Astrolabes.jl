@@ -8,24 +8,29 @@ struct Drawing
     score::Vector{Primitive}
     text::Vector{Primitive}
     pocket::Vector{Primitive}
+    guide::Vector{Primitive}
 end
 
 """
     drawing(part, scale, profile; tol) -> Drawing
 
 Convert a [`Part`](@ref) to millimetres. Labels become single-stroke text; with
-`profile.compensate_kerf` the cut paths are offset outward by half the kerf.
+`profile.compensate_kerf` the cut paths are offset outward by half the kerf. An artwork
+part (the engraving for another part's face) is not cut: its outline goes to the `GUIDE`
+layer, for lining the engraving up with the part.
 """
 function drawing(part::Part, s::Real, profile::Profile; tol::Real = 2e-5)
+    artwork = !isempty(part.artwork_for)
     solid =
-        profile.compensate_kerf ? shape_offset(part.solid, kerf(profile) / 2 / s; tol) :
-        part.solid
-    cut = Primitive[scale(p, s) for p in contour_prims(solid)]
+        profile.compensate_kerf && !artwork ?
+        shape_offset(part.solid, kerf(profile) / 2 / s; tol) : part.solid
+    outline = Primitive[scale(p, s) for p in contour_prims(solid)]
     eng = Primitive[scale(p, s) for p in part.engrave]
     sc = Primitive[scale(p, s) for p in part.score]
     txt = Primitive[scale(p, s) for l in part.labels for p in label_strokes(l)]
     pk = Primitive[scale(p, s) for p in contour_prims(part.pocket)]
-    return Drawing(part.name, cut, eng, sc, txt, pk)
+    return artwork ? Drawing(part.name, Primitive[], eng, sc, txt, pk, outline) :
+           Drawing(part.name, outline, eng, sc, txt, pk, Primitive[])
 end
 
 function bounds(prims; tol = 1e-3)
@@ -191,6 +196,7 @@ const DXF_COLORS = Dict(
     "ENGRAVE" => 7,
     "SCORE" => 5,
     "POCKET" => 3,
+    "GUIDE" => 8,
     "TEXT" => 7,
     "Edge_Cuts" => 2,
     "F_Cu" => 1,
@@ -245,6 +251,7 @@ end
 cut_width(::Profile) = 0.01
 cut_width(p::Paper) = p.stroke
 pocket_color(p::Profile) = get(p.colors, :pocket, "#00a000")
+guide_color(p::Profile) = get(p.colors, :guide, "#909090")
 
 function write_part(dir, d::Drawing, profile::Profile, formats)
     out = String[]
@@ -277,11 +284,18 @@ function write_part(dir, d::Drawing, profile::Profile, formats)
                 [c[:cut], pocket_color(profile)],
                 [cut_width(profile), cut_width(profile)],
             ),
+            isempty(d.guide) ?
             (
                 "engrave",
                 ["ENGRAVE" => marks, "SCORE" => d.score],
                 [c[:engrave], c[:score]],
                 [sw, sw],
+            ) :
+            (
+                "engrave",
+                ["GUIDE" => d.guide, "ENGRAVE" => marks, "SCORE" => d.score],
+                [guide_color(profile), c[:engrave], c[:score]],
+                [cut_width(profile), sw, sw],
             ),
         ]
         for (suffix, layers, cols, ws) in groups
@@ -300,15 +314,18 @@ function write_part(dir, d::Drawing, profile::Profile, formats)
             )
         end
     else
-        layers = ["CUT" => d.cut, "POCKET" => d.pocket, "ENGRAVE" => marks, "SCORE" => d.score]
-        cols = [c[:cut], pocket_color(profile), c[:engrave], c[:score]]
-        ws = [cut_width(profile), cut_width(profile), sw, sw]
-        # write the POCKET layer only where there is one, so other files are unchanged
-        if isempty(d.pocket)
-            deleteat!(layers, 2)
-            deleteat!(cols, 2)
-            deleteat!(ws, 2)
-        end
+        layers = [
+            "CUT" => d.cut,
+            "POCKET" => d.pocket,
+            "GUIDE" => d.guide,
+            "ENGRAVE" => marks,
+            "SCORE" => d.score,
+        ]
+        cols = [c[:cut], pocket_color(profile), guide_color(profile), c[:engrave], c[:score]]
+        ws = [cut_width(profile), cut_width(profile), cut_width(profile), sw, sw]
+        # write CUT, POCKET and GUIDE only where there is one, so other files are unchanged
+        keep = [!(i <= 3 && isempty(layers[i][2])) for i in eachindex(layers)]
+        layers, cols, ws = layers[keep], cols[keep], ws[keep]
         :dxf in formats && push!(out, write_dxf(joinpath(dir, "$(d.name).dxf"), layers))
         :svg in formats && push!(
             out,
@@ -371,10 +388,22 @@ function write_bom(path, a::Astrolabe, ps::Vector{Part}, profile::Profile)
         )
         println(io)
         println(io, rpad("part", 16), rpad("qty", 5), rpad("size (mm)", 18), "notes")
+        flat = a.mater_style === :integral && !a.rete_recess
         for p in ps
             x1, y1, x2, y2 = bounds(contour_prims(p.solid))
             sz = @sprintf("%.1f x %.1f", (x2 - x1) * a.scale, (y2 - y1) * a.scale)
             note =
+                flat && p.name == "mater" ?
+                "one piece, limb and plate built in: engrave the back with this file (drawn as seen from the back) and the front with mater_front" :
+                flat && p.name == "mater_front" ?
+                "not a separate piece: engraving for the mater's front face (limb and plate), drawn as seen from the front; GUIDE is the outline, not a cut" :
+                p.pocket_depth > 0 && a.mater_style === :integral ?
+                @sprintf(
+                    "one piece %.1f mm thick, plate built in; recess Ø%.1f mm, %.1f mm deep in the front for the rete (POCKET layer); back face drawn as seen from the back",
+                    profile.thickness + p.pocket_depth,
+                    2a.mater.ring_inner * a.scale,
+                    p.pocket_depth
+                ) :
                 p.pocket_depth > 0 ?
                 @sprintf(
                     "one piece %.1f mm thick; pocket Ø%.1f mm, %.1f mm deep in the front (POCKET layer); back face drawn as seen from the back",
@@ -382,8 +411,10 @@ function write_bom(path, a::Astrolabe, ps::Vector{Part}, profile::Profile)
                     2a.mater.ring_inner * a.scale,
                     p.pocket_depth
                 ) :
+                !isempty(p.artwork_for) && startswith(p.name, "plate_") ?
+                "not a separate piece: artwork for the floor of the $(p.artwork_for)'s recess; meridian upright" :
                 !isempty(p.artwork_for) ?
-                "not a separate piece: artwork for the $(p.artwork_for)'s front face around the pocket" :
+                "not a separate piece: artwork for the $(p.artwork_for)'s front face around the $(a.mater_style === :integral ? "recess" : "pocket")" :
                 p.face === :back ? "engrave the back face (drawn as seen from the back)" :
                 p.name == "limb" ?
                 "glued or riveted onto the mater; the tab keys the plates" :
@@ -403,7 +434,26 @@ function write_bom(path, a::Astrolabe, ps::Vector{Part}, profile::Profile)
             round(Int, profile.pin_diameter),
             " bolt or a rivet):",
         )
-        if a.mater_style === :single
+        if flat
+            println(io, "  rule, rete, mater (limb and plate engraved on its front), alidade.")
+            println(
+                io,
+                "Engrave the front centred on the pin hole and upright under the shackle: an",
+            )
+            println(
+                io,
+                @sprintf(
+                    "offset of 0.3 mm moves time readings by about %.1f min.",
+                    0.3 / (a.mater.ring_inner * a.scale) * 180 / π * 4
+                )
+            )
+        elseif a.mater_style === :integral
+            println(io, "  rule, rete in the mater's recess, mater (plate built in), alidade.")
+            println(
+                io,
+                "Glue the plate artwork in with its meridian pointing straight at the shackle.",
+            )
+        elseif a.mater_style === :single
             println(io, "  rule, rete, plate(s) in the mater's pocket, mater, alidade.")
             println(
                 io,
@@ -470,7 +520,9 @@ function render_preview(
     θa = deg2rad(alidade_rotation)
     sc(prims) = Primitive[scale(p, s) for p in prims]
     txt(p) = Primitive[scale(q, s) for l in p.labels for q in label_strokes(l)]
-    plate = ps[first(k for k in keys(ps) if startswith(k, "plate_"))]
+    # with the plate engraved on the mater's front there is no plate part
+    pk = findfirst(k -> startswith(k, "plate_"), collect(keys(ps)))
+    plate = pk === nothing ? nothing : ps[collect(keys(ps))[pk]]
     rete = ps["rete"]
     rule = ps["rule"]
     limb = get(ps, "limb", get(ps, "mater_front", nothing))
@@ -492,7 +544,7 @@ function render_preview(
         "mater" => outline,
         "limb" =>
             rot([sc(limb.engrave); txt(limb); sc(contour_prims(limb.solid))], 0.0),
-        "plate" => rot([sc(plate.engrave); txt(plate)], 0.0),
+        "plate" => plate === nothing ? Primitive[] : rot([sc(plate.engrave); txt(plate)], 0.0),
         "rete" => rot([sc(contour_prims(rete.solid)); sc(rete.engrave); txt(rete)], θr),
         "rule" => rot([sc(contour_prims(rule.solid)); sc(rule.engrave); txt(rule)], θu),
     ]

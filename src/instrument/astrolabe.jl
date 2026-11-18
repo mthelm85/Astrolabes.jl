@@ -37,6 +37,7 @@ struct Astrolabe
     pin_radius::Float64
     label_mm::Float64
     mater_style::Symbol
+    rete_recess::Bool
 end
 
 """
@@ -63,7 +64,13 @@ Keywords:
 - `mater = :stacked`: the mater as a flat disk with the limb ring glued on top, which
   any sheet process can cut; or `:single`, one piece with a pocket for the plates in
   its front face, for 3D printing or milling. The files then carry the pocket outline
-  on a `POCKET` layer, and `mater_front` is the artwork for the front face around it.
+  on a `POCKET` layer, and `mater_front` is the artwork for the front face around it;
+  or `:integral`, one flat piece with the limb and the plate (one latitude only) engraved
+  on its front: `mater_front` is the engraving for that face, which any laser cutter
+  that engraves both sides can make;
+- `recess = false`: with `mater = :integral`, cut a recess as deep as the rete is thick
+  into the front (3D printing or milling), so the rete turns flush with the limb; the
+  plate is then the artwork for the recess floor and `mater_front` that for the rim.
 """
 function astrolabe(
     latitude;
@@ -86,11 +93,18 @@ function astrolabe(
     hours::Symbol = :h24,
     rete_style::Union{Nothing,ReteStyle} = nothing,
     mater::Symbol = :stacked,
+    recess::Bool = false,
     tol::Real = 2e-5,
 )
-    mater in (:stacked, :single) || throw(ArgumentError("mater must be :stacked or :single"))
-    mater === :single && profile isa PCB &&
-        throw(ArgumentError("a PCB cannot have a pocket; use mater = :stacked"))
+    mater in (:stacked, :single, :integral) ||
+        throw(ArgumentError("mater must be :stacked, :single or :integral"))
+    mater !== :stacked && profile isa PCB &&
+        throw(ArgumentError("a PCB mater must be :stacked"))
+    recess && mater !== :integral &&
+        throw(ArgumentError("recess applies only to mater = :integral"))
+    mater === :integral && !isempty(latitudes) && throw(
+        ArgumentError("mater = :integral has one plate built in; use :single for several latitudes"),
+    )
     φ = latitude isa AbstractString ? parse_latitude(latitude) : Float64(latitude)
     ep = if epoch isa Epoch
         calendar_system === nothing ? epoch : Epoch(epoch.year, calendar_system)
@@ -236,6 +250,7 @@ function astrolabe(
         pin_r,
         label_mm,
         mater,
+        recess,
     )
 end
 
@@ -278,11 +293,26 @@ function parts(a::Astrolabe; tol::Real = 2e-5, engraving::Bool = true)
     msolid = shape_difference(m.outline, pin)
     ring = shape_union(shape_difference(m.outline, disk_shape(O, m.ring_inner; tol)), tab)
     single = a.mater_style === :single
+    integral = a.mater_style === :integral
+    recessed = integral && a.rete_recess    # plate built in, rete in a recess
+    flat = integral && !a.rete_recess       # plate and limb engraved on the front face
+    onepiece = single || integral
     # one piece: the plates sit in a pocket in its front face (the limb ring's hole, keyed
     # by the same tab), as deep as the plates are thick. The mater is drawn as seen from
-    # the back, so the pocket is mirrored into that frame.
-    pocket = single ? mirror_shape(shape_difference(disk_shape(O, m.ring_inner; tol), tab)) :
-        Shape()
+    # the back, so the pocket is mirrored into that frame. With the plate built in, the
+    # pocket is only a recess for the rete, as deep as the rete is thick, and needs no key.
+    pocket =
+        single ? mirror_shape(shape_difference(disk_shape(O, m.ring_inner; tol), tab)) :
+        recessed ? mirror_shape(disk_shape(O, m.ring_inner; tol)) : Shape()
+    depth =
+        single ? a.profile.thickness * length(a.plates) :
+        recessed ? a.profile.thickness : 0.0
+    recessed && (ring = shape_difference(m.outline, disk_shape(O, m.ring_inner; tol)))
+    plate_engraving(p) = reduce(
+        vcat,
+        [el.prims for el in p.elements if el.layer === :engrave];
+        init = Primitive[],
+    )
     push!(
         out,
         Part(
@@ -293,24 +323,41 @@ function parts(a::Astrolabe; tol::Real = 2e-5, engraving::Bool = true)
             txt(a.back.labels);
             face = :back,
             pocket,
-            pocket_depth = single ? a.profile.thickness * length(a.plates) : 0.0,
+            pocket_depth = depth,
         ),
     )
     # limb ring with its hour and degree scales and the plate key tab: a ring glued on the
-    # mater, or the artwork for the front face of the one-piece mater around its pocket
-    push!(
-        out,
-        Part(
-            single ? "mater_front" : "limb",
-            ring,
-            fit([scale_prims(m.hours); scale_prims(m.degrees)], ring),
-            Primitive[],
-            txt([m.hours.labels; m.degrees.labels]);
-            artwork_for = single ? "mater" : "",
-        ),
-    )
+    # mater, or the artwork for the front face of the one-piece mater around its pocket.
+    # Flat with the plate built in, the whole front face carries the limb and the plate.
+    if flat
+        p = only(a.plates)
+        front = mirror_shape(msolid)
+        push!(
+            out,
+            Part(
+                "mater_front",
+                front,
+                fit([scale_prims(m.hours); scale_prims(m.degrees); plate_engraving(p)], front),
+                Primitive[],
+                txt([m.hours.labels; m.degrees.labels; p.labels]);
+                artwork_for = "mater",
+            ),
+        )
+    else
+        push!(
+            out,
+            Part(
+                onepiece ? "mater_front" : "limb",
+                ring,
+                fit([scale_prims(m.hours); scale_prims(m.degrees)], ring),
+                Primitive[],
+                txt([m.hours.labels; m.degrees.labels]);
+                artwork_for = onepiece ? "mater" : "",
+            ),
+        )
+    end
     # with several plates, plain spacer rings raise the limb to the height of the stack
-    !single && length(a.plates) > 1 && push!(
+    !onepiece && length(a.plates) > 1 && push!(
         out,
         Part(
             "limb_spacer",
@@ -321,22 +368,28 @@ function parts(a::Astrolabe; tol::Real = 2e-5, engraving::Bool = true)
             quantity = length(a.plates) - 1,
         ),
     )
-    # plates
-    for p in a.plates
-        solid = shape_difference(
-            shape_difference(disk_shape(O, m.plate_radius; tol), notch),
-            pin,
-        )
-        eng = reduce(
-            vcat,
-            [el.prims for el in p.elements if el.layer === :engrave];
-            init = Primitive[],
-        )
+    # plates; in a recess, the plate is the artwork for the recess floor, which reaches the
+    # recess wall and has no notch; flat, it is engraved on the mater's front (above)
+    for p in (flat ? Plate[] : a.plates)
+        solid =
+            recessed ? shape_difference(disk_shape(O, m.ring_inner; tol), pin) :
+            shape_difference(shape_difference(disk_shape(O, m.plate_radius; tol), notch), pin)
+        eng = plate_engraving(p)
         name =
             "plate_" *
             replace(@sprintf("%.4g", abs(p.latitude)), "." => "p") *
             (p.latitude >= 0 ? "N" : "S")
-        push!(out, Part(name, solid, fit(eng, solid), Primitive[], txt(p.labels)))
+        push!(
+            out,
+            Part(
+                name,
+                solid,
+                fit(eng, solid),
+                Primitive[],
+                txt(p.labels);
+                artwork_for = recessed ? "mater" : "",
+            ),
+        )
     end
     r = a.rete
     push!(out, Part("rete", r.solid, fit(r.engrave, r.solid), Primitive[], txt(r.labels)))

@@ -78,6 +78,38 @@ thickness, then cut the `POCKET` profile into the front face by the pocket depth
 that `mater.dxf` is drawn as seen from the back, so its front face is the one facing away
 from you.
 
+### Limb and plate built in
+
+The limb and the plate are separate pieces so that the plate can be swapped for another
+latitude. With one latitude they can be part of the mater, and a laser cutter can make
+it, provided the service engraves both sides of a part:
+
+```julia
+a = astrolabe(47.3; mater = :integral)
+```
+
+The mater is then one flat disk. `mater` is cut and engraved on its back as usual;
+`mater_front` is the engraving for its front face, the limb's scales and the plate's
+lines together, drawn as seen from the front. Its outline is on a `GUIDE` layer (grey),
+for lining the engraving up with the part, not for cutting. The rete lies on the front
+face, as it lies on the plate of a stacked instrument. The plate's lines and the limb's
+scales are engraved together, so they cannot be turned against each other; ask the
+service how it registers the second side, since an engraving 0.3 mm off the pin hole moves
+time readings by about a minute. This option takes no extra `latitudes`.
+
+With a 3D printer or a mill, `recess = true` also cuts a recess into the front, as deep
+as the rete is thick, so the rete turns flush with the limb and the rule lies flat
+across both instead of standing a sheet's thickness above the limb's scale:
+
+```julia
+a = astrolabe(47.3; mater = :integral, recess = true)
+```
+
+The plate's lines are then on the recess floor: `plate_…` is the artwork for the floor
+(it fills the recess exactly) and `mater_front` the artwork for the rim. Glued in as
+paper, turn the floor artwork so that its meridian points straight at the shackle.
+`verify` checks that the rete turns clear of the recess wall.
+
 ## The rule and the alidade
 
 Both are counterchanged, as on historical instruments. One straight edge runs the full

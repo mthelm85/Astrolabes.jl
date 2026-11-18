@@ -56,10 +56,14 @@ function mass_model(a::Astrolabe)
     fixed = Pt(0, 0)
     rete = rule = alidade = (0.0, Pt(0, 0))
     vane = nothing
+    mater = only(p for p in ps if p.name == "mater")
     for p in ps
         A, c = area_centroid(p.solid)
-        # the one-piece mater's rim around the pocket is as thick as the plates it holds
-        q = isempty(p.artwork_for) ? p.quantity : length(a.plates)
+        # the one-piece mater's rim around the pocket is as deep as the pocket; the artwork
+        # for a built-in plate (the recess floor) adds no mass of its own
+        q =
+            isempty(p.artwork_for) ? p.quantity :
+            p.name == "mater_front" ? mater.pocket_depth / a.profile.thickness : 0.0
         if p.name == "rete"
             rete = (A, c)
         elseif p.name == "rule"
@@ -83,7 +87,6 @@ function mass_model(a::Astrolabe)
         Aa += vane[1] * length(a.alidade.vane_mounts)
         alidade = (Aa, m / Aa)
     end
-    mater = only(p for p in ps if p.name == "mater")
     top = argmax(c -> maximum(q -> q.y, c), holes(mater.solid))
     pivot = Pt(0.0, maximum(q -> q.y, top))
     return MassModel(total, fixed, rete, rule, alidade, pivot)

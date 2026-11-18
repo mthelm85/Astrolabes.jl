@@ -253,7 +253,28 @@ function fabrication_checks(a::Astrolabe, profile::Profile; tol::Real = 2e-5)
     for part in ps
         nm = part.name
         solid = part.solid
-        if !isempty(part.pocket.contours)
+        if !isempty(part.pocket.contours) && a.rete_recess
+            # the rete turns in the recess, clear of its wall, and lies flush with the rim
+            rete = ps[findfirst(p -> p.name == "rete", ps)]
+            wall = minimum(norm2(q) for c in part.pocket.contours for q in c)
+            gap = (wall - maximum(norm2(q) for c in rete.solid.contours for q in c)) * s
+            push!(
+                out,
+                CurveCheck(
+                    "$nm: rete turns clear of the recess wall (mm short of half the fit clearance)",
+                    [max(profile.fit_clearance / 2 - gap, 0.0)],
+                    1e-9,
+                ),
+            )
+            push!(
+                out,
+                CurveCheck(
+                    "$nm: recess as deep as the rete (mm)",
+                    [abs(part.pocket_depth - profile.thickness)],
+                    1e-9,
+                ),
+            )
+        elseif !isempty(part.pocket.contours)
             # every plate drops into the pocket (drawn as seen from the back, so mirrored
             # back to the front), keyed by its notch, and the pocket is as deep as the plates
             pk = mirror_shape(part.pocket)

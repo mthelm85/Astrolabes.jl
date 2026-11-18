@@ -135,6 +135,71 @@ end
     @test_throws ArgumentError astrolabe(47.3; mater = :single, profile = PCB())
 end
 
+@testitem "Flat mater with limb and plate engraved on it" tags = [:instrument, :render] setup =
+    [Instrument] begin
+    a = astrolabe(47.3; mater = :integral)
+    ps = parts(a)
+    names = [p.name for p in ps]
+    @test sort(names) == sort(["mater", "mater_front", "rete", "rule", "alidade", "vane"])
+    m = only(p for p in ps if p.name == "mater")
+    @test isempty(m.pocket.contours) && m.pocket_depth == 0
+    f = only(p for p in ps if p.name == "mater_front")
+    @test f.artwork_for == "mater"
+    # the front carries the limb's scales and the plate's lines
+    b = parts(astrolabe(47.3))
+    limb = only(p for p in b if p.name == "limb")
+    plate = only(p for p in b if startswith(p.name, "plate_"))
+    @test length(f.engrave) > length(limb.engrave) && length(f.engrave) > length(plate.engrave)
+    @test length(f.labels) == length(limb.labels) + length(plate.labels)
+    r = verify(a)
+    @test Astrolabes.passed(r)
+    isempty(Astrolabes.failures(r)) || display(r)
+    dir = mktempdir()
+    render(a, dir)
+    front = dxf_entities(joinpath(dir, "mater_front.dxf"))
+    @test !any(e -> get(e, "layer", "") == "CUT", front)
+    @test any(e -> get(e, "layer", "") == "GUIDE", front)
+    @test any(e -> get(e, "layer", "") == "CUT", dxf_entities(joinpath(dir, "mater.dxf")))
+    bom = read(joinpath(dir, "parts.txt"), String)
+    @test occursin("limb and plate built in", bom) && occursin("not a cut", bom)
+    @test isfile(render_preview(a, joinpath(dir, "preview.svg")))
+    # Metal: the front is an engrave-only file
+    dm = mktempdir()
+    render(astrolabe(47.3; mater = :integral, profile = Metal()), dm)
+    @test isfile(joinpath(dm, "mater_front_engrave.dxf"))
+    @test !isfile(joinpath(dm, "mater_front_cut.dxf"))
+    @test abs(hanging_tilt(a; rete = balanced_rete_angle(a))) < 0.02
+    @test_throws ArgumentError astrolabe(47.3; recess = true)
+end
+
+@testitem "Mater with the plate built in" tags = [:instrument, :render] setup = [Instrument] begin
+    a = astrolabe(47.3; mater = :integral, recess = true)
+    ps = parts(a)
+    names = [p.name for p in ps]
+    @test "mater_front" in names && !("limb" in names)
+    m = only(p for p in ps if p.name == "mater")
+    @test m.pocket_depth ≈ a.profile.thickness
+    pl = only(p for p in ps if startswith(p.name, "plate_"))
+    @test pl.artwork_for == "mater"
+    # the recess floor artwork fills the recess exactly, with no notch
+    @test Astrolabes.shape_area(Astrolabes.shape_difference(pl.solid, Astrolabes.mirror_shape(m.pocket))) < 1e-9
+    @test length(Astrolabes.holes(pl.solid)) == 1
+    r = verify(a)
+    @test Astrolabes.passed(r)
+    isempty(Astrolabes.failures(r)) || display(r)
+    @test any(c -> occursin("rete turns clear of the recess wall", c.label), r.checks)
+    @test !any(c -> occursin("plates fit the pocket", c.label), r.checks)
+    dir = mktempdir()
+    render(a, dir)
+    @test any(e -> get(e, "layer", "") == "POCKET", dxf_entities(joinpath(dir, "mater.dxf")))
+    bom = read(joinpath(dir, "parts.txt"), String)
+    @test occursin("plate built in", bom) && occursin("floor of the mater's recess", bom)
+    @test isfile(render_preview(a, joinpath(dir, "preview.svg")))
+    @test abs(hanging_tilt(a; rete = balanced_rete_angle(a))) < 0.02
+    @test_throws ArgumentError astrolabe(47.3; mater = :integral, latitudes = (46.0,))
+    @test_throws ArgumentError astrolabe(47.3; mater = :integral, profile = PCB())
+end
+
 @testitem "Simulator agrees with closed-form astronomy" tags = [:simulate] setup =
     [Instrument] begin
     sim = simulate(A47)
