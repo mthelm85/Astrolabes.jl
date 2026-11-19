@@ -38,7 +38,9 @@ Keywords:
 - `twilight = (-18,)`: altitudes of twilight lines;
 - `unequal_hours = :exact`: `:exact` (polylines), `:circles` (historical 3-point
   circles) or `:none`;
-- `label_height = 0.035`: cap height of labels in plate units (`0` for no labels).
+- `label_height = 0.035`: cap height of labels in plate units (`0` for no labels);
+- `hub_radius = 0`: radius in plate units around the centre that the rete's hub covers,
+  kept free of labels (`0`: 4.2 label heights).
 
 Latitudes beyond ±89.5° are clamped with a warning.
 """
@@ -67,6 +69,7 @@ function Plate(
     twilight = (-18.0,),
     unequal_hours::Symbol = :exact,
     label_height::Real = 0.035,
+    hub_radius::Real = 0.0,
     hemisphere::Symbol = latitude >= 0 ? :north : :south,
 )
     φ = Float64(latitude)
@@ -94,7 +97,8 @@ function Plate(
         tw,
         unequal_hours,
     )
-    labels = label_height > 0 ? plate_labels(P, φ, ε, els, Float64(label_height)) : Label[]
+    hub = hub_radius > 0 ? Float64(hub_radius) : 4.2 * label_height
+    labels = label_height > 0 ? plate_labels(P, φ, ε, els, Float64(label_height), hub) : Label[]
     return Plate(
         φ,
         P,
@@ -342,7 +346,7 @@ end
 # north of the centre for the low ones that cross the south side beyond the limb), azimuths
 # just above the horizon,
 # unequal-hour numbers on the equator, and the latitude near the bottom of the plate.
-function plate_labels(P, φ, ε, els, h)
+function plate_labels(P, φ, ε, els, h, hub = 4.2h)
     labels = Label[]
     rl = limb_radius(P, ε)
     φn = abs(φ)
@@ -352,9 +356,9 @@ function plate_labels(P, φ, ε, els, h)
             # low circles cross the meridian's south side beyond the limb: number them
             # where they cross its north side instead, clear of the pin and the rete's hub
             # (the label spans y to y + h)
-            if y + h >= rl * 0.98
+            # (the top of the meridian also carries the plate's key notch, 1.6 mm deep)
+            if y + h >= rl - 1.6h
                 y = -tand((φn - el.value) / 2)
-                hub = 4.2h
                 (y > hub || y + h < -hub) || continue
             end
             push!(

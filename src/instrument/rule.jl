@@ -126,6 +126,7 @@ function Alidade(;
     tab_mm = 6.0,
     vane_height_mm = 16.0,
     slot_clearance_mm = 0.1,
+    pinhole_mm = 1.2,
     tol = 2e-5,
 )
     s = scale
@@ -158,7 +159,7 @@ function Alidade(;
     th = mm(thickness_mm)
     vane = shape_union(rect_shape(-hw, 0, hw, vh), rect_shape(-tab / 2, -th, tab / 2, 0.0))
     hole = Pt(0, 0.72vh)
-    vane = shape_difference(vane, disk_shape(hole, mm(0.6); tol))
+    vane = shape_difference(vane, disk_shape(hole, mm(pinhole_mm / 2); tol))
     mounts = [(Pt(0, rv), 0.0), (Pt(0, -rv), Float64(π))]
     return Alidade(half_length, w, solid, fid, vane, [hole], mounts, rv)
 end

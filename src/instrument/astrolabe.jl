@@ -146,6 +146,13 @@ function astrolabe(
             twilight,
             unequal_hours,
             label_height = mm(label_mm),
+            # keep plate labels out from under the rete's hub (as sized below)
+            hub_radius = mm(
+                (
+                    rete_style === nothing ?
+                    max(6.5, fp.pin_diameter + 3fp.min_feature) : rete_style.hub_radius
+                ) + 0.5,
+            ),
             hemisphere,
         ) for l in lats
     ]
@@ -227,6 +234,9 @@ function astrolabe(
         thickness_mm = fp.thickness,
         vane_radius = back.vane_radius,
         vane_band = back.vane_band,
+        # a 1.2 mm sight hole, or the smallest hole the process can cut (with a little to
+        # spare: the polygon for a circle lies just inside it)
+        pinhole_mm = max(1.2, min_hole(fp) + 0.02),
         width_mm = max(
             10.0,
             5mf,

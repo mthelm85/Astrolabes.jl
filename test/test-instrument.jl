@@ -135,6 +135,19 @@ end
     @test_throws ArgumentError astrolabe(47.3; mater = :single, profile = PCB())
 end
 
+@testitem "Metal sheet: every hole cuttable" tags = [:instrument] setup = [Instrument] begin
+    # a star notch closed off by a later pointer once left a 1.3 mm hole in the rete, and the
+    # 1.2 mm vane pinhole was below what 1.6 mm sheet can cut
+    for t in (1.016, 1.6, 2.03)
+        a = astrolabe(47.308684; profile = Metal(thickness = t))
+        r = verify(a)
+        @test Astrolabes.passed(r)
+        isempty(Astrolabes.failures(r)) || display(r)
+        @test !any(x -> x[2] == "on the edge of the rete structure", a.rete.skipped)
+    end
+    @test Astrolabes.passed(verify(astrolabe(40.0; profile = Metal(thickness = 1.6))))
+end
+
 @testitem "Flat mater with limb and plate engraved on it" tags = [:instrument, :render] setup =
     [Instrument] begin
     a = astrolabe(47.3; mater = :integral)

@@ -359,11 +359,24 @@ function Rete(
         c for c in solid.contours if
         signed_area(c) > 0 || 2sqrt(-signed_area(c) / π) * s >= fill_d
     ])
-    # notches, unless one would cut a piece off
+    # notches, unless one would cut a piece off. A notch must open onto an edge: parts
+    # added after it was placed (another star's pointer) can close its mouth, leaving a
+    # tiny enclosed hole that cannot be cut, so aim it again at the nearest edge of the
+    # finished rete, and give the star up if that fails too.
     npieces = length(components(solid))
+    opens(cut, sh) =
+        length(components(cut)) == npieces && length(holes(cut)) == length(holes(sh))
+    function renotch(sh, T)
+        Qb, d = nearest_boundary_point(sh, T)
+        dir = d < 1e-9 ? unit(T) : unit(Qb - T)
+        n = Pt(-dir.y, dir.x)
+        edge = T + (d + mm(0.6)) * dir
+        return polygon_shape([T, edge + mm(1.0) * n, edge - mm(1.0) * n])
+    end
     for (i, nt) in enumerate(notches)
         cut = shape_difference(solid, nt)
-        if length(components(cut)) == npieces
+        opens(cut, solid) || (cut = shape_difference(solid, renotch(solid, notch_tips[i])))
+        if opens(cut, solid)
             solid = cut
         else
             j = findfirst(p -> p.kind === :notch && p.tip == notch_tips[i], pointers)
